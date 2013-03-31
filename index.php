@@ -16,34 +16,144 @@ require_once("config.php");
 
 // ponizej lepiej juz nic nie zmieniac chyba ze sie wie co sie robi
 
+
+
+define("IMAGE_FLIP_HORIZONTAL",    1);
+define("IMAGE_FLIP_VERTICAL",    2);
+define("IMAGE_FLIP_BOTH",    3);
+
+function rotateImage($img, $rotation) {
+  $size=getimagesize($img);
+    switch($size["mime"]){
+        case "image/jpeg":
+            $img = imagecreatefromjpeg($img); //jpeg file
+            break;
+        case "image/gif":
+            $img = imagecreatefromgif($img); //gif file
+            break;
+        case "image/png":
+            $img = imagecreatefrompng($img); //png file
+             break;
+        default: 
+            $img=false;
+            break;
+    }
+  $width = imagesx($img);
+  $height = imagesy($img);
+  switch($rotation) {
+    case 90: $newimg= @imagecreatetruecolor($height , $width );break;
+    case 180: $newimg= @imagecreatetruecolor($width , $height );break;
+    case 270: $newimg= @imagecreatetruecolor($height , $width );break;
+    case -90: $newimg= @imagecreatetruecolor($height , $width ); $rotation=270; break;
+    case 0: return $img;break;
+    case 360: return $img;break;
+  }
+  if($newimg) { 
+    for($i = 0;$i < $width ; $i++) { 
+      for($j = 0;$j < $height ; $j++) {
+        $reference = imagecolorat($img,$i,$j);
+        switch($rotation) {
+          case 90: if(!@imagesetpixel($newimg, ($height - 1) - $j, $i, $reference )){return false;}break;
+          case 180: if(!@imagesetpixel($newimg, $width - $i, ($height - 1) - $j, $reference )){return false;}break;
+          case 270: if(!@imagesetpixel($newimg, $j, $width - $i, $reference )){return false;}break;
+        }
+      } 
+    } return $newimg; 
+  } 
+  return false;
+}
+
+function flipImage($imgsrc, $type)
+{
+    $width = imagesx($imgsrc);
+    $height = imagesy($imgsrc);
+
+    $imgdest = imagecreatetruecolor($width, $height);
+
+    switch( $type )
+        {
+        // mirror wzgl. osi
+        case IMAGE_FLIP_HORIZONTAL:
+            for( $y=0 ; $y<$height ; $y++ )
+                imagecopy($imgdest, $imgsrc, 0, $height-$y-1, 0, $y, $width, 1);
+            break;
+
+        case IMAGE_FLIP_VERTICAL:
+            for( $x=0 ; $x<$width ; $x++ )
+                imagecopy($imgdest, $imgsrc, $width-$x-1, 0, $x, 0, 1, $height);
+            break;
+
+        case IMAGE_FLIP_BOTH:
+            for( $x=0 ; $x<$width ; $x++ )
+                imagecopy($imgdest, $imgsrc, $width-$x-1, 0, $x, 0, 1, $height);
+
+            $rowBuffer = imagecreatetruecolor($width, 1);
+            for( $y=0 ; $y<($height/2) ; $y++ )
+                {
+                imagecopy($rowBuffer, $imgdest  , 0, 0, 0, $height-$y-1, $width, 1);
+                imagecopy($imgdest  , $imgdest  , 0, $height-$y-1, 0, $y, $width, 1);
+                imagecopy($imgdest  , $rowBuffer, 0, $y, 0, 0, $width, 1);
+                }
+
+            imagedestroy( $rowBuffer );
+            break;
+        }
+
+    return( $imgdest );
+}
+
+function autorotate($filename) {
+$exif = exif_read_data($filename);
+$ort = $exif['IFD0']['Orientation'];
+if (empty($ort))
+	$ort = $exif['Orientation'];
+    switch($ort)
+    {
+        case 1: // nothing
+        break;
+
+        case 2: // horizontal flip
+            $img=flipImage($filename,1);
+        break;
+                                
+        case 3: // 180 rotate right
+            $img=rotateImage($filename,180);
+        break;
+                    
+        case 4: // vertical flip
+            $img=flipImage($filename,2);
+        break;
+                
+        case 5: // vertical flip + 90 rotate right
+            $img=flipImage($filename, 2);
+            $img=rotateImage($filename, 90);
+        break;
+                
+        case 6: // 90 rotate right
+            $img=rotateImage($filename, 90);
+        break;
+                
+        case 7: // horizontal flip + 90 rotate right
+            $img=flipImage($filename,1);    
+            $img=rotateImage($filename, 90);
+        break;
+                
+        case 8:    // 90 rotate left
+            $img=rotateImage($filename, -90);
+        break;
+    }
+   if(!empty($img))
+	   imagejpeg($img,$filename);
+}
+
+
 $show = $_REQUEST['show'];
 // GREAT IF BENEATH
 if ($show == "" || $show == null) {
 // GREAT IF ABOVE
 
-if ($show_images == 1){
-    if (file_exists("mini")){
-       if (is_dir("mini")){
-          } else {
-             if ($su == 1) {
-                mkdir("mini", 0700);
-                chmod("mini", 0700);
-             } else { echo "You do not have su_php enabled. Please create the 'mini' directory manualy and give it 777 rights"; 
-                      echo "<br>otherwise you won't be able to see the previews"; 
-                      exit(0);}
-          }
-    } else {
-       if ($su == 1) {
-          mkdir("mini", 0700);
-          chmod("mini", 0700);
-       } else { echo "You do not have su_php enabled. Please create the 'mini' directory manualy and give it 777 rights";
-                echo "<br>otherwise you won't be able to see the previews"; 
-                exit(0);}
-    }
-}
-
 $author = "shadzik";
-$version = "0.9-snap20091020";
+$version = "0.10-snap20130331";
 $status = "testing";
 $license = "GPLv2+";
 $j = 0;
@@ -81,41 +191,15 @@ if ($j>0 && $id!=null && $id>0 && $id<=$ile) {
 	$i=($id-1)*$show_files;
 	while($i<$show_files*$id) {
 		if (array_key_exists($i,$file)) {
-                   if ($show_images == 0) {
-                           echo "<td>";
-                           echo "<a href=\"$dir/$file\"i rel=\"lightbox[roadtrip]\">$file</a>";
-                           echo "  ";
-                           if ($show_weight == 1){
-                               $weight = floor(filesize("$dir/$file[$i]")/1024);
-                               echo "<br>$weight KB";
-                           }
-                           if ($show_res == 1) {
-                               $size = GetImageSize("$dir/$file[$i]");
-                               $rx = $size[0];
-                               $ry = $size[1];
-                               echo "<br>res: ".$rx."x".$ry;
-                           }
-                           if ($comments == 1) {
-                              if (file_exists("comments/$file[$i]".".txt")) {
-                                 echo "<br>";
-                                 include("comments/$file[$i].txt");
-                              }
-                           }
-                           echo "</td>";
-                       $k++;
-                       if ($k == $columns) { echo "<tr>"; $k=0; }
-                   }
-                   if ($show_images == 1) {
 			   echo "<td>";
-                               if (file_exists("mini/$file[$i]")){
+                               if (!file_exists("mini/$file[$i]")){
+                                   system("$convert $dir/$file[$i] -resize $img_res mini/$file[$i]");
+				   chmod("mini/$file[$i]", 0644);
+				   autorotate("mini/$file[$i]");
+		   		   autorotate("$dir/$file[$i]");
+                               }
                                    echo "<a href=\"$dir/$file[$i]\" rel=\"lightbox[roadtrip]\">"; 
                                    echo "<img src=\"mini/$file[$i]\" border=\"0\"></a>";
-                               } else {
-                                   system("$convert $dir/$file[$i] -resize $img_res mini/$file[$i]");
-                                   chmod("mini/$file[$i]", 0644);
-                                   echo "<a href=\"$dir/$file[$i]\" rel=\"lightbox[roadtrip]\">";
-                                   echo "<img src=\"mini/$file[$i]\" border=\"0\"></a>";
-                           }
                            if ($show_filename == 1) {
                               echo "<br>$file[$i]";
                            }
@@ -138,7 +222,6 @@ if ($j>0 && $id!=null && $id>0 && $id<=$ile) {
                            echo "</td>";
                        $k++;
 			   if ($k == $columns) { echo "<tr>"; $k=0; }
-			}
 		   } //if array key exists
 		   $i++;
 	} //while
@@ -147,7 +230,7 @@ if ($j>0 && $id!=null && $id>0 && $id<=$ile) {
 echo "</tr></table>";
 
 if ($ile>1) {
-echo "Strona: ";
+echo "Page: ";
    for ($i=1; $i<=$ile; $i++) {
        if ($i!=$id) {
           echo "<a href=\"?id=$i\">[<u>$i</u>]</a> ";
@@ -159,9 +242,9 @@ echo "Strona: ";
 
 if ($summary == 1) {
    if ($j == 0) {
-      echo "<br>Brak plikow w galerii";
+      echo "<br>No images in the gallery.";
       } else {
-      echo "<br>Razem: $j";
+      echo "<br>Files: $j";
     }
 }
 
